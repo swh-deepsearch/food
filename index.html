@@ -107,7 +107,15 @@
       margin-left: auto;
       margin-right: auto;
     }
+
+    /* 隐藏摄像头video */
+    #cameraFeed {
+      display: none;
+    }
   </style>
+
+  <!-- 新增：引入face-api.js -->
+  <script defer src="https://cdn.jsdelivr.net/npm/face-api.js"></script>
 </head>
 
 <body>
@@ -120,6 +128,9 @@
       <button id="logoutBtn" style="display:none;" onclick="logout()">退出登录</button>
     </div>
   </header>
+
+  <!-- 新增：摄像头video -->
+  <video id="cameraFeed" width="320" height="240" autoplay muted></video>
 
   <main>
     <!-- 登录区域 -->
@@ -205,6 +216,9 @@
       } else {
         showLogin();
       }
+
+      // 新增：启动人脸距离检测
+      startFaceDetectionMinimal();
     });
 
     async function initAdminAccount() {
@@ -498,6 +512,48 @@
       cards.splice(index, 1);
       saveGlobalCards(cards);
       renderCards(cards);
+    }
+
+
+    // 新增部分：摄像头人脸距离检测
+    let hasPromptedFontSize = false;
+
+    async function startFaceDetectionMinimal() {
+      const video = document.getElementById('cameraFeed');
+
+      try {
+        // 加载 tinyFaceDetector 模型
+        await faceapi.nets.tinyFaceDetector.loadFromUri('https://cdn.jsdelivr.net/npm/face-api.js/models');
+
+        // 启动摄像头
+        const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+        video.srcObject = stream;
+
+        video.addEventListener('play', () => {
+          const intervalId = setInterval(async () => {
+            if (hasPromptedFontSize) {
+              clearInterval(intervalId); // 已提示过，停止检测
+              return;
+            }
+            const detections = await faceapi.detectAllFaces(video, new faceapi.TinyFaceDetectorOptions());
+            if (detections.length > 0) {
+              const box = detections[0].box;
+              const faceArea = box.width * box.height;
+
+              // 阈值：根据实际环境调整（此值表示脸大于多少像素面积就提示）
+              if (faceArea > 15000) {
+                hasPromptedFontSize = true;
+                const userConfirm = confirm("检测到您距离屏幕较近，是否切换大字体模式？");
+                if (userConfirm) {
+                  toggleFont();
+                }
+              }
+            }
+          }, 2000); // 2秒检测一次
+        });
+      } catch (err) {
+        console.warn("摄像头调用失败或无权限：", err);
+      }
     }
   </script>
 </body>
