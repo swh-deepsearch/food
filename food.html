@@ -1,0 +1,505 @@
+<!DOCTYPE html>
+<html lang="zh">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>适老化食疗平台 - 管理员版</title>
+  <style>
+    body {
+      font-family: sans-serif;
+      margin: 0;
+      padding: 0;
+      background-color: #f8f8f8;
+      color: #333;
+    }
+
+    header {
+      background-color: #4caf50;
+      color: white;
+      padding: 1rem;
+      text-align: center;
+    }
+
+    main {
+      max-width: 800px;
+      margin: auto;
+      padding: 1rem;
+    }
+
+    .card {
+      background: white;
+      border-radius: 1rem;
+      padding: 1rem;
+      box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+      margin-bottom: 1rem;
+      position: relative;
+    }
+
+    .card img {
+      max-width: 100%;
+      border-radius: 1rem;
+    }
+
+    .large-font {
+      font-size: 1.5em;
+    }
+
+    .controls {
+      display: flex;
+      flex-direction: column;
+      gap: 1rem;
+      margin-bottom: 1rem;
+    }
+
+    input,
+    textarea {
+      width: 100%;
+      padding: 0.5rem;
+      font-size: 1em;
+      box-sizing: border-box;
+    }
+
+    button {
+      padding: 0.5rem 1rem;
+      font-size: 1em;
+      border: none;
+      border-radius: 0.5rem;
+      background-color: #4caf50;
+      color: white;
+      cursor: pointer;
+    }
+
+    button:disabled {
+      background-color: #9e9e9e;
+      cursor: not-allowed;
+    }
+
+    /* 管理员编辑删除按钮样式 */
+    .edit-btn,
+    .delete-btn {
+      position: absolute;
+      top: 10px;
+      padding: 5px 10px;
+      font-size: 0.9em;
+      border-radius: 0.5rem;
+      cursor: pointer;
+      color: white;
+    }
+
+    .edit-btn {
+      right: 70px;
+      background-color: #2196f3;
+    }
+
+    .delete-btn {
+      right: 10px;
+      background-color: #f44336;
+    }
+
+    #authSection,
+    #registerSection {
+      background-color: #e8f5e9;
+      padding: 1rem;
+      border-radius: 1rem;
+      margin-bottom: 1rem;
+      max-width: 400px;
+      margin-left: auto;
+      margin-right: auto;
+    }
+  </style>
+</head>
+
+<body>
+  <header>
+    <h1 id="title">线上食疗食材平台</h1>
+    <div style="display:flex; justify-content:center; gap: 1rem; flex-wrap: wrap;">
+      <button onclick="toggleFont()">🧓 切换大字体</button>
+      <button onclick="toggleLanguage()">🔊 播报：<span id="langLabel">普通话</span></button>
+      <span id="userInfo" style="line-height:2rem;"></span>
+      <button id="logoutBtn" style="display:none;" onclick="logout()">退出登录</button>
+    </div>
+  </header>
+
+  <main>
+    <!-- 登录区域 -->
+    <section id="authSection">
+      <h2>👤 用户登录</h2>
+      <input id="username" placeholder="用户名" autocomplete="username" />
+      <input id="password" type="password" placeholder="密码" autocomplete="current-password" />
+      <div style="margin-top: 0.5rem; display:flex; gap:0.5rem; flex-wrap: wrap; justify-content:center;">
+        <button id="loginBtn">登录</button>
+        <button id="showRegisterBtn">注册</button>
+      </div>
+      <p id="authStatus" style="color:red; text-align:center;"></p>
+    </section>
+
+    <!-- 注册区域 -->
+    <section id="registerSection" style="display:none;">
+      <h2>📝 用户注册</h2>
+      <input id="regUsername" placeholder="用户名" autocomplete="username" />
+      <input id="regPassword" type="password" placeholder="密码" autocomplete="new-password" />
+      <div style="margin-top: 0.5rem; display:flex; gap:0.5rem; flex-wrap: wrap; justify-content:center;">
+        <button id="registerBtn">注册</button>
+        <button id="showLoginBtn">返回登录</button>
+      </div>
+      <p id="registerStatus" style="color:red; text-align:center;"></p>
+    </section>
+
+    <!-- 主内容区域 -->
+    <section id="mainSection" style="display:none;">
+      <!-- 管理员专属添加内容区域 -->
+      <div id="adminControls" class="controls" style="display:none;">
+        <input type="file" accept="image/*" onchange="handleUpload(event)" />
+        <input id="titleInput" placeholder="输入标题..." />
+        <textarea id="descInput" placeholder="输入描述..."></textarea>
+        <input id="linkInput" placeholder="输入产品购买链接..." />
+        <button id="addCardBtn">添加食材卡片</button>
+      </div>
+      <div id="cardContainer"></div>
+    </section>
+  </main>
+
+  <script>
+    // 管理员账号改为 swh，密码改为 123456swh
+    const ADMIN_USERNAME = 'swh';
+
+    async function sha256(message) {
+      const msgBuffer = new TextEncoder().encode(message);
+      const hashBuffer = await crypto.subtle.digest('SHA-256', msgBuffer);
+      const hashArray = Array.from(new Uint8Array(hashBuffer));
+      return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+    }
+
+    const defaultGlobalCards = [
+      {
+        image: 'https://cdn.pixabay.com/photo/2017/01/20/00/30/mushrooms-1996417_960_720.jpg',
+        title: '香菇',
+        desc: '增强免疫力，补气养血。',
+        link: 'https://example.com/product/xianggu'
+      },
+      {
+        image: 'https://cdn.pixabay.com/photo/2016/03/05/19/02/ginger-1238243_960_720.jpg',
+        title: '生姜',
+        desc: '驱寒暖胃，促进消化。',
+        link: 'https://example.com/product/shengjiang'
+      }
+    ];
+
+    let lang = 'zh';
+    const synth = window.speechSynthesis;
+    let latestImageData = null;
+
+    document.addEventListener('DOMContentLoaded', () => {
+      document.getElementById('showRegisterBtn').addEventListener('click', showRegister);
+      document.getElementById('showLoginBtn').addEventListener('click', showLogin);
+      document.getElementById('loginBtn').addEventListener('click', login);
+      document.getElementById('registerBtn').addEventListener('click', register);
+      document.getElementById('addCardBtn').addEventListener('click', addCard);
+
+      initAdminAccount();
+
+      if (localStorage.getItem('loggedInUser')) {
+        showMainInterface();
+        loadGlobalCards();
+      } else {
+        showLogin();
+      }
+    });
+
+    async function initAdminAccount() {
+      if (!localStorage.getItem('user_' + ADMIN_USERNAME)) {
+        // 管理员密码改为 123456swh
+        const passHash = await sha256('123456swh');
+        const adminData = {
+          passwordHash: passHash
+        };
+        localStorage.setItem('user_' + ADMIN_USERNAME, JSON.stringify(adminData));
+      }
+    }
+
+    function showRegister() {
+      clearMessages();
+      document.getElementById('authSection').style.display = 'none';
+      document.getElementById('registerSection').style.display = 'block';
+      document.getElementById('mainSection').style.display = 'none';
+    }
+
+    function showLogin() {
+      clearMessages();
+      document.getElementById('authSection').style.display = 'block';
+      document.getElementById('registerSection').style.display = 'none';
+      document.getElementById('mainSection').style.display = 'none';
+    }
+
+    function showMainInterface() {
+      clearMessages();
+      document.getElementById('authSection').style.display = 'none';
+      document.getElementById('registerSection').style.display = 'none';
+      document.getElementById('mainSection').style.display = 'block';
+
+      const user = localStorage.getItem('loggedInUser');
+      const userInfo = document.getElementById('userInfo');
+      userInfo.style.display = 'inline-block';
+      userInfo.textContent = `您好，${user} ${isAdmin(user) ? '(管理员)' : ''}`;
+      document.getElementById('logoutBtn').style.display = 'inline-block';
+
+      document.getElementById('adminControls').style.display = isAdmin(user) ? 'flex' : 'none';
+      document.getElementById('addCardBtn').disabled = !isAdmin(user);
+    }
+
+    function clearMessages() {
+      document.getElementById('authStatus').textContent = '';
+      document.getElementById('registerStatus').textContent = '';
+    }
+
+    async function register() {
+      clearMessages();
+      const user = document.getElementById('regUsername').value.trim();
+      const pass = document.getElementById('regPassword').value.trim();
+      const status = document.getElementById('registerStatus');
+
+      if (!user || !pass) {
+        status.textContent = '用户名和密码不能为空';
+        return;
+      }
+      if (user === ADMIN_USERNAME) {
+        status.textContent = '此用户名为保留管理员账号，不能注册';
+        return;
+      }
+      if (localStorage.getItem('user_' + user)) {
+        status.textContent = '该用户名已被注册';
+        return;
+      }
+
+      const hash = await sha256(pass);
+      const userData = {
+        passwordHash: hash
+      };
+      localStorage.setItem('user_' + user, JSON.stringify(userData));
+
+      status.style.color = 'green';
+      status.textContent = '注册成功！请登录';
+      setTimeout(() => {
+        showLogin();
+        document.getElementById('username').value = user;
+        document.getElementById('password').value = '';
+        status.style.color = 'red';
+        status.textContent = '';
+      }, 1500);
+    }
+
+    async function login() {
+      clearMessages();
+      const user = document.getElementById('username').value.trim();
+      const pass = document.getElementById('password').value.trim();
+      const status = document.getElementById('authStatus');
+
+      if (!user || !pass) {
+        status.textContent = '请输入用户名和密码';
+        return;
+      }
+
+      const userDataStr = localStorage.getItem('user_' + user);
+      if (!userDataStr) {
+        status.style.color = 'red';
+        status.textContent = '❌ 账号不存在，请先注册';
+        return;
+      }
+
+      const userData = JSON.parse(userDataStr);
+      const hash = await sha256(pass);
+      if (hash !== userData.passwordHash) {
+        status.style.color = 'red';
+        status.textContent = '❌ 密码错误';
+        return;
+      }
+
+      localStorage.setItem('loggedInUser', user);
+      showMainInterface();
+      loadGlobalCards();
+    }
+
+    function logout() {
+      localStorage.removeItem('loggedInUser');
+      document.getElementById('userInfo').style.display = 'none';
+      document.getElementById('logoutBtn').style.display = 'none';
+      document.getElementById('cardContainer').innerHTML = '';
+      document.getElementById('mainSection').style.display = 'none';
+      showLogin();
+    }
+
+    function isAdmin(user) {
+      return user === ADMIN_USERNAME;
+    }
+
+    function speak(text) {
+      if (!text) return;
+      const utter = new SpeechSynthesisUtterance(text);
+      utter.lang = lang === 'zh' ? 'zh-CN' : 'yue-HK';
+      synth.speak(utter);
+    }
+
+    function toggleFont() {
+      document.body.classList.toggle('large-font');
+    }
+
+    function toggleLanguage() {
+      lang = lang === 'zh' ? 'yue' : 'zh';
+      document.getElementById('langLabel').innerText = lang === 'zh' ? '普通话' : '粤语';
+    }
+
+    function handleUpload(event) {
+      const file = event.target.files[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = e => {
+        latestImageData = e.target.result;
+      };
+      reader.readAsDataURL(file);
+    }
+
+    function addCard() {
+      const user = localStorage.getItem('loggedInUser');
+      if (!user || !isAdmin(user)) {
+        alert('只有管理员可以添加内容');
+        return;
+      }
+      if (!latestImageData) {
+        alert('请先上传图片');
+        return;
+      }
+
+      const title = document.getElementById('titleInput').value.trim();
+      const desc = document.getElementById('descInput').value.trim();
+      const link = document.getElementById('linkInput').value.trim();
+
+      if (!title) {
+        alert('请输入标题');
+        return;
+      }
+      if (!desc) {
+        alert('请输入描述');
+        return;
+      }
+
+      const cards = getGlobalCards();
+      cards.push({
+        image: latestImageData,
+        title,
+        desc,
+        link
+      });
+      saveGlobalCards(cards);
+      renderCards(cards);
+
+      document.getElementById('titleInput').value = '';
+      document.getElementById('descInput').value = '';
+      document.getElementById('linkInput').value = '';
+      latestImageData = null;
+      document.querySelector('input[type="file"]').value = '';
+    }
+
+    function getGlobalCards() {
+      const data = localStorage.getItem('globalCards');
+      if (!data) return [...defaultGlobalCards];
+      try {
+        const arr = JSON.parse(data);
+        if (Array.isArray(arr)) return arr;
+        else return [...defaultGlobalCards];
+      } catch {
+        return [...defaultGlobalCards];
+      }
+    }
+
+    function saveGlobalCards(cards) {
+      localStorage.setItem('globalCards', JSON.stringify(cards));
+    }
+
+    function renderCards(cards) {
+      const container = document.getElementById('cardContainer');
+      container.innerHTML = '';
+      cards.forEach((card, idx) => {
+        const { image, title, desc, link } = card;
+
+        const cardDiv = document.createElement('div');
+        cardDiv.className = 'card';
+
+        const img = document.createElement('img');
+        img.src = image;
+        img.alt = '食材图片';
+
+        const h3 = document.createElement('h3');
+        h3.textContent = title;
+
+        const p = document.createElement('p');
+        p.textContent = desc;
+
+        const speakBtn = document.createElement('button');
+        speakBtn.textContent = '🔊 播报文字';
+        speakBtn.onclick = () => speak(title + '，' + desc);
+
+        cardDiv.appendChild(img);
+        cardDiv.appendChild(h3);
+        cardDiv.appendChild(p);
+        cardDiv.appendChild(speakBtn);
+
+        if (isAdmin(localStorage.getItem('loggedInUser'))) {
+          const editBtn = document.createElement('button');
+          editBtn.className = 'edit-btn';
+          editBtn.textContent = '编辑';
+          editBtn.onclick = () => editCard(idx);
+
+          const deleteBtn = document.createElement('button');
+          deleteBtn.className = 'delete-btn';
+          deleteBtn.textContent = '删除';
+          deleteBtn.onclick = () => deleteCard(idx);
+
+          cardDiv.appendChild(editBtn);
+          cardDiv.appendChild(deleteBtn);
+        } else {
+          speakBtn.disabled = false;
+        }
+
+        container.appendChild(cardDiv);
+      });
+    }
+
+    function loadGlobalCards() {
+      const cards = getGlobalCards();
+      renderCards(cards);
+    }
+
+    function editCard(index) {
+      const cards = getGlobalCards();
+      const card = cards[index];
+      if (!card) return alert('卡片不存在');
+
+      const newTitle = prompt('修改标题', card.title);
+      if (newTitle === null) return;
+      const newDesc = prompt('修改描述', card.desc);
+      if (newDesc === null) return;
+      const newLink = prompt('修改购买链接', card.link || '');
+      if (newLink === null) return;
+
+      cards[index] = {
+        ...card,
+        title: newTitle.trim() || card.title,
+        desc: newDesc.trim() || card.desc,
+        link: newLink.trim()
+      };
+      saveGlobalCards(cards);
+      renderCards(cards);
+    }
+
+    function deleteCard(index) {
+      if (!confirm('确认删除该食材卡片吗？')) return;
+      const cards = getGlobalCards();
+      cards.splice(index, 1);
+      saveGlobalCards(cards);
+      renderCards(cards);
+    }
+  </script>
+</body>
+
+</html>
