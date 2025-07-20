@@ -523,7 +523,8 @@
 
       try {
         // 加载 tinyFaceDetector 模型
-        await faceapi.nets.tinyFaceDetector.loadFromUri('https://cdn.jsdelivr.net/npm/face-api.js/models');
+        await faceapi.nets.tinyFaceDetector.loadFromUri('https://justadudewhohacks.github.io/face-api.js/models');
+
 
         // 启动摄像头
         const stream = await navigator.mediaDevices.getUserMedia({ video: true });
